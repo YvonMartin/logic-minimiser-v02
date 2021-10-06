@@ -17,10 +17,10 @@
    Finally, in 2021, I took exactly the same alogithme to make one
 """
 __author__ = 'Yvon Martin'
-__version__ = "0.1"
+__version__ = "0.2"
 __author_email__ = 'yvon.l.martin@gmail.com'
 
-
+import itertools
 
 def decode_bin(tup_terme, nbr):
     """
@@ -32,7 +32,7 @@ def decode_bin(tup_terme, nbr):
     return "".join(['-' if msq & (1 << k) else '1' if terme & (1 << k )
                 else '0' for k in range(nbr-1, -1, -1)])
 
-"""------------------------------------"""
+"""-------------------------------------------"""
 
 def edit_solution(terme01, nom_variable):
     """
@@ -66,6 +66,7 @@ def acqui_terme(chaine01, lg):
             break
     return (terme, msq), erreur
 
+"""----------------------------------------------"""
 def input_tables_01(data_in, nbr_variable):
     """
     Decode the stack (alphabetical list of 3 characters '1-0') data_in to form
@@ -95,11 +96,7 @@ def input_tables_01(data_in, nbr_variable):
                 terme_1.add(terme)
     return (list(terme_1), list(terme_0), erreur)  # liste normalisée
 
-
-"""---------------------------------------------------------------------"""
-
-"""=========================================================================="""
-"""=================debut classe ================================="""
+"""================= classe ================================="""
 class Simply:
     """
     calculates all reduced optimal terms from minterms (terms 1) and maxterms (terms 0)
@@ -124,7 +121,7 @@ class Simply:
          e.g. (20, 9) is the simplified term 1-10-
 
         -synthesis: solutions to cover minterms in the third sub-list
-        e.g. [[(t1, m1)(t2, m²)] [(t1, m1)(t2, m2)(t3, m3)(t4, m4] [(2)(1, 3)(1,4)]
+        e.g. [[(t1, m1)(t2, m2)] [(t1, m1)(t2, m2)(t3, m3)(t4, m4] [(2)(1, 3)(1,4)]
         2 essential terms, 4 additional terms, choose from the
         additional 2 (best solution) or 1 and 3 or 1 and 4
     """
@@ -139,7 +136,6 @@ class Simply:
     def __call__(self, tbl_1, tbl_0):
         self.tbl_1 = tbl_1
         self.tbl_0 = tbl_0     #list_normalise
-
 
         def __expense(terme_0_1, lg):
             """
@@ -184,7 +180,6 @@ class Simply:
                     term1, term0 = set(), set()
             return list(term1), list(term0), erreur
 
-
         """--------------------------------------------------------"""
         def __pt_facteur_unique(terme, table_0, nbr):
             # retourne un terme reduit dont les bits à 1 pointe les colonnes de facteur essentiel
@@ -225,25 +220,35 @@ class Simply:
             table_1_restant = [i for i in table_1 if (i & flag) == 0]
             return table_essentiel, table_1_restant
 
+        """=================== Petrick's calcul ============================="""
+        def __petrick(s0, dimac):
+
+            # distributivité de t dans s0
+            s1=[j if i in j else [i] + j for i in dimac for j in s0]
+            #simplification: ab + ba = ab
+            s1=list(set(map(frozenset, s1)))
+            # simplification ab + a = a + a
+            for i in s1:
+                s1=[i if i < j else j for j in s1 ]
+            # simplification a + a = a
+            # return list(map(list,list(set(map(frozenset, s1)))))
+            return list(map(list,(set(map(frozenset, s1)))))
+
         """=================== additional terms ========================="""
         def __terme_supp(pt_croix, table_0_reduit_croix, nbr):
+            msq = ((1 << nbr)-1) ^ pt_croix
+            #msq1 = msq0 - 1
+            s0 = [[]]
+            for croix in table_0_reduit_croix:
+                dimac = [cpt+1 for cpt in range(nbr) if (croix & msq & (1<<cpt))]
+                s0 = __petrick(s0, dimac)
+
             masque_tr_reduit = []
-            for msq_supp in range(1, 1 << nbr):
-                fl = 0
-                if len(masque_tr_reduit):
-                    for j in masque_tr_reduit:
-                        if(j | msq_supp) == msq_supp:
-                            fl = 1
-                            break
-                if fl == 0:
-                    if pt_croix == (msq_supp & pt_croix):
-                        for i in table_0_reduit_croix:
-                            if(i & msq_supp) == 0:
-                                fl = 1
-                                break
-                        if fl == 0:
-                            # c'est un terme réduit supplémentaire
-                            masque_tr_reduit.append(msq_supp)
+            for tdim in s0:
+                ms = pt_croix
+                for i in tdim:
+                    ms |= 1 << (i - 1)
+                masque_tr_reduit.append(ms)
             return masque_tr_reduit
 
         """================== additional terms ========================= """
@@ -255,58 +260,42 @@ class Simply:
             full coverage of the function
             """
             table_terme_supl = []
-            msq1 = (1 << nbr)- 1   #*********************************
+            msq1 = (1 << nbr)- 1
             for tab in table_1_reduit:
                 pt_croix = __pt_facteur_unique(tab, table_0, nbr)
                 table_0_reduit_croix = [i ^ tab for i in table_0 if not((i ^ tab) & pt_croix)]
                 masque_tr_reduit = __terme_supp(pt_croix, table_0_reduit_croix, nbr)
                 ter = tab, masque_tr_reduit
                 table_terme_supl.append(ter)
-            table_compl_reduite = []
-
-            for i in table_terme_supl:
-                term, t_msq = i
-                for msq in t_msq:
-                    j = term & msq, msq ^ msq1    # normalisation (& msq)****************
-                    table_compl_reduite.append(j)
-            table_compl_reduite = list(set(table_compl_reduite))
-            return table_compl_reduite
+            return list(set( [(term & msq, msq ^ msq1)
+                        for (term, t_msq )in table_terme_supl  for msq in t_msq]))
 
         """ ======================= summary table ============================"""
         def __tbl_synthese(table_1_restant, table_terme_supl, nbr):
             """
             construction of the summary table to calculate additional terms
             that provide total coverage
+            return in DIMACS format with purs literals
             """
-            table_synthese = [0 for i in range(len(table_1_restant))]
+
+            table_synthese = [[] for i in range(len(table_1_restant))]
             msq1 = (1 << nbr)- 1
             cpt = 0
-            pteur = 1
             for ter1, msq in table_terme_supl:
                 for index, ter in enumerate(table_1_restant):
                     if (ter1 & (msq ^ msq1)) == (ter & (msq ^ msq1)):
-                        table_synthese[index] |= pteur
-                pteur <<= 1
+                        table_synthese[index].append(cpt + 1)
                 cpt += 1
             return table_synthese, cpt
 
-        """====================== list of choices ========================== """
-        def __numero_terme_sup(synthese, lg):
-            """
-            creates the list of choices to be made among the additional terms
-            """
-            tb_synthese = []
-            for i in synthese:
-                synth = []
-                nu = 1
-                pteur = 1
-                for j in range(lg):
-                    if i & pteur:
-                        synth.append(nu)
-                    nu += 1
-                    pteur <<= 1
-                tb_synthese.append(synth)
-            return tb_synthese
+        """=======2e methode ===== list of choices =========================== """
+        # table est une liste format DIMACS
+        def __numero_terme_sup(table):
+            s0=[[]]
+            while len(table):
+                t=table.pop()
+                s0 = __petrick(s0, t)
+            return s0
 
         """========================Simplification ============================"""
 
@@ -316,25 +305,25 @@ class Simply:
             print("---- Error: terms 0 cover terms 1 ----\n\n")
             quit()
 
-
         table_essentiel, table_1_restant = __terme_essentiel(table_1, table_0, self.nbr)
         if 'v' in self.arg_list:
             print( '\n-- discovered', len(table_essentiel), 'essential term(s) --')
             print('-- remains to be covered', len(table_1_restant), '--\n')
 
         table_terme_supl = __termes_supplementaires(table_1_restant, table_0, self.nbr)
+
         if 'v' in self.arg_list:
             print( '-- discovered', len(table_terme_supl), 'additional terms --')
 
-        tbl_synt, large = __tbl_synthese(table_1_restant, table_terme_supl, self.nbr)
-        if 'v' in self.arg_list:
-            print('\n-- synthese:', large, 'term(s) to cover', len(tbl_synt),'minterms remaining --')
+        tbl_synt, cpt= __tbl_synthese(table_1_restant, table_terme_supl, self.nbr)
 
-        synthese = __terme_supp(0, tbl_synt, large)
         if 'v' in self.arg_list:
-            print ('\n---- Synthese ok ----\n')
+            print('\n-- synthese:', cpt, 'term(s) to cover', len(tbl_synt),'minterms remaining --')
+        if len(tbl_synt):
+            sol = __numero_terme_sup(tbl_synt)
+        else:
+            sol = []
 
-        sol = __numero_terme_sup(synthese, large)
         return table_essentiel, table_terme_supl, sol
 
 """----------------------class end -----------------------------------------------------"""

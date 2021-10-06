@@ -38,7 +38,7 @@ Synthèse
 """
 
 __author__ = 'Yvon Martin'
-__version__ = "0.1"
+__version__ = "0.2"
 
 from solvebool import input_tables_01, decode_bin, edit_solution, Simply
 
@@ -89,7 +89,7 @@ t1, t0, erreur = list_normalise
 if erreur:
     print("---- Error in list of entries ----\n\n")
     quit()
-extens = ".out"
+extens = ".out" #===================xxxx
 rep = input("To have the reverse form type i")
 
 print("------------------------------- ")
@@ -101,7 +101,7 @@ if rep != "i":
     print("Direct form")
 else:
     t_essentiel, t_supplementaire, nu_synthese = simply(t0,t1)
-    extens = ".outi"
+    extens = ".outi"     #==================xxxx
     print("Inverse form")
 #     print("table des termes essentiels")
 #     print(t_essentiel)
